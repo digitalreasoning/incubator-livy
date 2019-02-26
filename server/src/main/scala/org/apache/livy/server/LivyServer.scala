@@ -26,6 +26,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 import org.apache.hadoop.security.{SecurityUtil, UserGroupInformation}
+import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod.KERBEROS
+import org.apache.hadoop.security.UserGroupInformation.AuthenticationMethod.KERBEROS_SSL
 import org.apache.hadoop.security.authentication.server._
 import org.eclipse.jetty.servlet.FilterHolder
 import org.scalatra.{NotFound, ScalatraServlet}
@@ -90,7 +92,10 @@ class LivyServer extends Logging {
     livyConf.set(LIVY_SPARK_SCALA_VERSION.key,
       sparkScalaVersion(formattedSparkVersion, scalaVersionFromSparkSubmit, livyConf))
 
-    if (UserGroupInformation.isSecurityEnabled) {
+    val kerberosAuthMethods = Seq(KERBEROS, KERBEROS_SSL)
+    val currentUserAuthMethod = UserGroupInformation.getCurrentUser.getRealAuthenticationMethod
+    if (UserGroupInformation.isSecurityEnabled
+      && (kerberosAuthMethods contains currentUserAuthMethod)) {
       // If Hadoop security is enabled, run kinit periodically. runKinit() should be called
       // before any Hadoop operation, otherwise Kerberos exception will be thrown.
       executor = Executors.newScheduledThreadPool(1,
