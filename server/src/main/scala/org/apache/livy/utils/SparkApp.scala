@@ -91,7 +91,7 @@ object SparkApp {
       new SparkYarnApp(uniqueAppTag, appId, process, listener, livyConf)
     } else {
       require(process.isDefined, "process must not be None when Livy master is not YARN.")
-      new SparkProcApp(process.get, listener)
+      new SparkProcApp(process.get, listener, livyConf)
     }
   }
 }

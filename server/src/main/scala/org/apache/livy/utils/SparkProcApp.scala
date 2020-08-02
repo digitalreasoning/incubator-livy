@@ -17,7 +17,7 @@
 
 package org.apache.livy.utils
 
-import org.apache.livy.{Logging, Utils}
+import org.apache.livy.{LivyConf, Logging, Utils}
 
 /**
  * Provide a class to control a Spark application using spark-submit.
@@ -25,16 +25,32 @@ import org.apache.livy.{Logging, Utils}
  * @param process The spark-submit process launched the Spark application.
  */
 class SparkProcApp(
-                    process: LineBufferedProcess,
-                    listener: Option[SparkAppListener])
+    process: LineBufferedProcess,
+    listener: Option[SparkAppListener],
+    livyConf: LivyConf)
   extends SparkApp with Logging {
 
   private var state = SparkApp.State.STARTING
 
   override def kill(): Unit = {
     if (process.isAlive) {
+
+      // Access k8s driver pod name from logs before destroying the process
+      var driverPodName = ""
+      if (livyConf.isRunningOnKubernetes()) {
+        driverPodName = findDriverPodName().getOrElse("")
+      }
+
       process.destroy()
       waitThread.join()
+
+      // Kill the k8s driver pod
+      if (livyConf.isRunningOnKubernetes() && driverPodName.nonEmpty) {
+        val processBuilder = new SparkProcessBuilder(livyConf)
+        processBuilder.master(livyConf.sparkMaster())
+        processBuilder.conf("spark.kubernetes.appKillPodDeletionGracePeriod", "5")
+        processBuilder.start(Option.empty, Traversable("--kill", s"spark:$driverPodName"))
+      }
     }
   }
 
@@ -52,16 +68,8 @@ class SparkProcApp(
     changeState(SparkApp.State.RUNNING)
     process.waitFor() match {
       case 0 =>
-        val exitCodeOption = procExitCode()
-        if (exitCodeOption.isDefined) {
-          val exitCode = exitCodeOption.get
-          if (exitCode != 0) {
-            changeState(SparkApp.State.FAILED)
-            info(s"Parsed $exitCode from the output.")
-            error(s"spark-submit exited with code $exitCode")
-          } else {
-            changeState(SparkApp.State.FINISHED)
-          }
+        if (livyConf.isRunningOnKubernetes()) {
+          changeKubernetesAppState()
         } else {
           changeState(SparkApp.State.FINISHED)
         }
@@ -71,25 +79,59 @@ class SparkProcApp(
     }
   }
 
-  private def procExitCode(): Option[Int] = {
-    val EXIT_CODE_LOG_PREFIX = "Exit code:"
+  /**
+   * Scans [[process.inputLines]] for an entry that contains a substring represented
+   * by "itemLogPrefix" and returns the item of interest by removing the "itemLogPrefix"
+   * substring from the entry.
+   *
+   * @param itemLogPrefix the prefix of log item to find
+   */
+  private def findItemFromLineBuffer(itemLogPrefix: String): Option[String] = {
     val processStdOutIt = process.inputLines
-    val exitCodeLog = processStdOutIt.find(it => it.contains(EXIT_CODE_LOG_PREFIX))
-    if (exitCodeLog.isDefined) {
-      val exitCodeLogSplit = exitCodeLog.get.split(EXIT_CODE_LOG_PREFIX)
-      if (exitCodeLogSplit.size > 1) {
-        val errorCode = exitCodeLogSplit(1).trim
-        return toNumber(errorCode)
+    val itemLog = processStdOutIt.find(it => it.contains(itemLogPrefix))
+    if (itemLog.isDefined) {
+      val itemLogSplit = itemLog.get.split(itemLogPrefix)
+      if (itemLogSplit.size > 1) {
+        val item = itemLogSplit(1).trim
+        return Option.apply(item)
       }
     }
     Option.empty
   }
 
-  private def toNumber(string: String): Option[Int] = {
-    try {
-      Option.apply(string.toInt)
-    } catch {
-      case _: Exception => Option.empty
+  private def findDriverPodName(): Option[String] = {
+    findItemFromLineBuffer("pod name:")
+  }
+
+  private def changeKubernetesAppState() {
+    def findProcExitCode(): Option[Int] = {
+      val exitCode = findItemFromLineBuffer("Exit code:")
+      if (exitCode.isDefined) {
+        return toNumber(exitCode.get)
+      }
+      Option.empty
+    }
+
+    def toNumber(string: String): Option[Int] = {
+      try {
+        Option.apply(string.toInt)
+      } catch {
+        case _: Exception => Option.empty
+      }
+    }
+
+    val exitCodeOption = findProcExitCode()
+    if (exitCodeOption.isDefined) {
+      val exitCode = exitCodeOption.get
+      if (exitCode != 0) {
+        changeState(SparkApp.State.FAILED)
+        info(s"Parsed $exitCode from the output.")
+        error(s"spark-submit exited with code $exitCode")
+      } else {
+        changeState(SparkApp.State.FINISHED)
+      }
+    } else {
+      changeState(SparkApp.State.FINISHED)
     }
   }
 }
