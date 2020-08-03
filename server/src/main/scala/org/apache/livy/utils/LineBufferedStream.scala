@@ -17,11 +17,13 @@
 
 package org.apache.livy.utils
 
-import java.io.{IOException, InputStream}
+import java.io.{InputStream, IOException}
 import java.util.concurrent.locks.ReentrantLock
 
 import scala.io.Source
+
 import com.google.common.collect.EvictingQueue
+
 import org.apache.livy.Logging
 
 class LineBufferedStream(inputStream: InputStream, logSize: Int) extends Logging {
