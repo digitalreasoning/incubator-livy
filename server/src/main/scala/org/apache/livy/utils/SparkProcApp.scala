@@ -48,8 +48,10 @@ class SparkProcApp(
       if (livyConf.isRunningOnKubernetes() && driverPodName.nonEmpty) {
         val processBuilder = new SparkProcessBuilder(livyConf)
         processBuilder.master(livyConf.sparkMaster())
-        processBuilder.conf("spark.kubernetes.appKillPodDeletionGracePeriod", "5")
-        processBuilder.start(Option.empty, Traversable("--kill", s"spark:$driverPodName"))
+        processBuilder.conf("spark.kubernetes.appKillPodDeletionGracePeriod", "0")
+        processBuilder.start(Option.empty,
+          Traversable("--kill", s"spark:$driverPodName"),
+          killOrStatusRequest = true)
       }
     }
   }
