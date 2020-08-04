@@ -91,7 +91,11 @@ object SparkApp {
       new SparkYarnApp(uniqueAppTag, appId, process, listener, livyConf)
     } else {
       require(process.isDefined, "process must not be None when Livy master is not YARN.")
-      new SparkProcApp(process.get, listener, livyConf)
+      if (livyConf.isRunningOnKubernetes()) {
+        new SparkKubernetesApp(process.get, listener, livyConf)
+      } else {
+        new SparkProcApp(process.get, listener)
+      }
     }
   }
 }
