@@ -106,8 +106,17 @@ class SparkProcApp(
   }
 
   private def changeKubernetesAppState() {
+
+    def findTerminationReason(): Option[String] = {
+      val terminationReason = findItemFromLineBuffer("termination reason:")
+      if (terminationReason.isDefined) {
+        return terminationReason
+      }
+      Option.empty
+    }
+
     def findProcExitCode(): Option[Int] = {
-      val exitCode = findItemFromLineBuffer("Exit code:")
+      val exitCode = findItemFromLineBuffer("exit code:")
       if (exitCode.isDefined) {
         return toNumber(exitCode.get)
       }
@@ -127,10 +136,17 @@ class SparkProcApp(
       val exitCode = exitCodeOption.get
       if (exitCode != 0) {
         changeState(SparkApp.State.FAILED)
-        info(s"Parsed $exitCode from the output.")
+        info(s"Parsed exit code: $exitCode from the output.")
         error(s"spark-submit exited with code $exitCode")
       } else {
-        changeState(SparkApp.State.FINISHED)
+        val terminationReason = findTerminationReason()
+        if (terminationReason.isDefined && terminationReason.get != "Completed") {
+          changeState(SparkApp.State.FAILED)
+          info(s"Parsed termination reason: ${terminationReason.get} from the output.")
+          error(s"spark-submit exited with code $exitCode but termination reason wasn't completed.")
+        } else {
+          changeState(SparkApp.State.FINISHED)
+        }
       }
     } else {
       changeState(SparkApp.State.FINISHED)
