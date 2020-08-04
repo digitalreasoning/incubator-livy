@@ -23,11 +23,11 @@
     <groupId>org.apache.livy</groupId>
     <artifactId>livy-main</artifactId>
     <relativePath>../pom.xml</relativePath>
-    <version>0.5.0-incubating-dr2</version>
+    <version>0.5.0-incubating-dr3</version>
   </parent>
 
   <artifactId>livy-coverage-report</artifactId>
-  <version>0.5.0-incubating-dr2</version>
+  <version>0.5.0-incubating-dr3</version>
   <packaging>pom</packaging>
 
   <dependencies>

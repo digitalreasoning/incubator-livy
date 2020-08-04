@@ -24,12 +24,12 @@ import org.apache.livy.{Logging, Utils}
  *
  * @param process The spark-submit process launched the Spark application.
  */
-class SparkProcApp(
-                    process: LineBufferedProcess,
-                    listener: Option[SparkAppListener])
+class SparkProcApp (
+   process: LineBufferedProcess,
+   listener: Option[SparkAppListener])
   extends SparkApp with Logging {
 
-  private var state = SparkApp.State.STARTING
+  protected var state = SparkApp.State.STARTING
 
   override def kill(): Unit = {
     if (process.isAlive) {
@@ -41,55 +41,20 @@ class SparkProcApp(
   override def log(): IndexedSeq[String] =
     ("stdout: " +: process.inputLines) ++ ("\nstderr: " +: process.errorLines)
 
-  private def changeState(newState: SparkApp.State.Value) = {
+  protected def changeState(newState: SparkApp.State.Value) = {
     if (state != newState) {
       listener.foreach(_.stateChanged(state, newState))
       state = newState
     }
   }
 
-  private val waitThread = Utils.startDaemonThread(s"SparProcApp_$this") {
+  protected val waitThread = Utils.startDaemonThread(s"SparProcApp_$this") {
     changeState(SparkApp.State.RUNNING)
     process.waitFor() match {
-      case 0 =>
-        val exitCodeOption = procExitCode()
-        if (exitCodeOption.isDefined) {
-          val exitCode = exitCodeOption.get
-          if (exitCode != 0) {
-            changeState(SparkApp.State.FAILED)
-            info(s"Parsed $exitCode from the output.")
-            error(s"spark-submit exited with code $exitCode")
-          } else {
-            changeState(SparkApp.State.FINISHED)
-          }
-        } else {
-          changeState(SparkApp.State.FINISHED)
-        }
+      case 0 => changeState(SparkApp.State.FINISHED)
       case exitCode =>
         changeState(SparkApp.State.FAILED)
         error(s"spark-submit exited with code $exitCode")
-    }
-  }
-
-  private def procExitCode(): Option[Int] = {
-    val EXIT_CODE_LOG_PREFIX = "Exit code:"
-    val processStdOutIt = process.inputLines
-    val exitCodeLog = processStdOutIt.find(it => it.contains(EXIT_CODE_LOG_PREFIX))
-    if (exitCodeLog.isDefined) {
-      val exitCodeLogSplit = exitCodeLog.get.split(EXIT_CODE_LOG_PREFIX)
-      if (exitCodeLogSplit.size > 1) {
-        val errorCode = exitCodeLogSplit(1).trim
-        return toNumber(errorCode)
-      }
-    }
-    Option.empty
-  }
-
-  private def toNumber(string: String): Option[Int] = {
-    try {
-      Option.apply(string.toInt)
-    } catch {
-      case _: Exception => Option.empty
     }
   }
 }

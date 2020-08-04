@@ -154,7 +154,10 @@ class SparkProcessBuilder(livyConf: LivyConf) extends Logging {
     this
   }
 
-  def start(file: Option[String], args: Traversable[String]): LineBufferedProcess = {
+  def start(file: Option[String],
+            args: Traversable[String],
+            killOrStatusRequest: Boolean = false)
+  : LineBufferedProcess = {
     var arguments = ArrayBuffer(_executable)
 
     def addOpt(option: String, value: Option[String]): Unit = {
@@ -192,7 +195,9 @@ class SparkProcessBuilder(livyConf: LivyConf) extends Logging {
 
     addOpt("--queue", _queue)
 
-    arguments += file.getOrElse("spark-internal")
+    if (!killOrStatusRequest) {
+      arguments += file.getOrElse("spark-internal")
+    }
     arguments ++= args
 
     val argsString = arguments

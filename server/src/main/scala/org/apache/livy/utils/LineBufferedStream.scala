@@ -17,7 +17,7 @@
 
 package org.apache.livy.utils
 
-import java.io.InputStream
+import java.io.{InputStream, IOException}
 import java.util.concurrent.locks.ReentrantLock
 
 import scala.io.Source
@@ -37,15 +37,23 @@ class LineBufferedStream(inputStream: InputStream, logSize: Int) extends Logging
   private val thread = new Thread {
     override def run() = {
       val lines = Source.fromInputStream(inputStream).getLines()
-      for (line <- lines) {
-        info(s"stdout: $line")
-        _lock.lock()
-        try {
-          _lines.add(line)
-          _condition.signalAll()
-        } finally {
-          _lock.unlock()
+      try {
+        for (line <- lines) {
+          info(s"stdout: $line")
+          _lock.lock()
+          try {
+            _lines.add(line)
+            _condition.signalAll()
+          } finally {
+            _lock.unlock()
+          }
         }
+      } catch {
+        case e: IOException =>
+          info(s"Encountered IO Exception while accessing buffered stream : ${e.getMessage}")
+          if (logger.isTraceEnabled()) {
+            logger.trace("Encountered IO Exception while accessing buffered stream.", e)
+          }
       }
 
       _lock.lock()
