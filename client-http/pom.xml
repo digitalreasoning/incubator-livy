@@ -20,12 +20,12 @@
   <parent>
     <groupId>org.apache.livy</groupId>
     <artifactId>livy-main</artifactId>
-    <version>0.5.0-incubating-dr3</version>
+    <version>0.5.0-incubating-dr4</version>
   </parent>
 
   <groupId>org.apache.livy</groupId>
   <artifactId>livy-client-http</artifactId>
-  <version>0.5.0-incubating-dr3</version>
+  <version>0.5.0-incubating-dr4</version>
   <packaging>jar</packaging>
 
   <dependencies>
