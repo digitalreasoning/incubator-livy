@@ -51,7 +51,7 @@ class LineBufferedStream(inputStream: InputStream, logSize: Int) extends Logging
       } catch {
         case e: IOException =>
           info(s"Encountered IO Exception while accessing buffered stream : ${e.getMessage}")
-          if (logger.isInfoEnabled) {
+          if (logger.isTraceEnabled()) {
             logger.trace("Encountered IO Exception while accessing buffered stream.", e)
           }
       }
