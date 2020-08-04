@@ -35,22 +35,20 @@ class SparkKubernetesApp(
   override def kill(): Unit = {
     if (process.isAlive) {
 
-      // Access k8s driver pod name from logs before destroying the process
-      var driverPodName = ""
-      if (livyConf.isRunningOnKubernetes()) {
-        driverPodName = findDriverPodName().getOrElse("")
-      }
+      // Access k8s driver pod name and namespace from logs before destroying the process
+      val driverPodName = findDriverPodName().getOrElse("")
+      val namespace = findNameSpace().getOrElse("")
 
       process.destroy()
       waitThread.join()
 
       // Kill the k8s driver pod
-      if (livyConf.isRunningOnKubernetes() && driverPodName.nonEmpty) {
+      if (namespace.nonEmpty && driverPodName.nonEmpty) {
         val processBuilder = new SparkProcessBuilder(livyConf)
         processBuilder.master(livyConf.sparkMaster())
         processBuilder.conf("spark.kubernetes.appKillPodDeletionGracePeriod", "0")
         processBuilder.start(Option.empty,
-          Traversable("--kill", s"spark:$driverPodName"),
+          Traversable("--kill", s"$namespace:$driverPodName"),
           killOrStatusRequest = true)
       }
     }
@@ -91,12 +89,16 @@ class SparkKubernetesApp(
     findItemFromLineBuffer("pod name:")
   }
 
+  private def findNameSpace(): Option[String] = {
+    findItemFromLineBuffer("namespace:")
+  }
+
   private def kubernetesAppState(): SparkApp.State.Value = {
 
     def findTerminationReason(): Option[String] = {
       val terminationReason = findItemFromLineBuffer("termination reason:")
       if (terminationReason.isDefined) {
-        return terminationReason
+        return terminationReasonLivyBatchClient
       }
       Option.empty
     }
