@@ -98,7 +98,7 @@ class SparkKubernetesApp(
     def findTerminationReason(): Option[String] = {
       val terminationReason = findItemFromLineBuffer("termination reason:")
       if (terminationReason.isDefined) {
-        return terminationReasonLivyBatchClient
+        return terminationReason
       }
       Option.empty
     }
